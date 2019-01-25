@@ -1,0 +1,154 @@
+---
+title: "Assigment"
+author: "Jaco"
+date: "25-1-2019"
+output: html_document
+---
+
+## Introduction
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. 
+
+More information is available from the website here: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+Data
+
+The training data for this project are available here: https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here: https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+The data for this project come from this source: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har. If you use the document you create for this class for any purpose please cite them as they have been very generous in allowing their data to be used for this kind of assignment.
+
+The goal of your project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. You may use any of the other variables to predict with. You should create a report describing how you built your model, how you used cross validation, what you think the expected out of sample error is, and why you made the choices you did. You will also use your prediction model to predict 20 different test cases.
+
+##Importing Data:
+
+```{r}
+setwd("/Users/jaco/Documents/datasciencecoursera/Course 8_Machine Learning/Week 4")
+dataset <- read.csv('./pml-training.csv', header=T)
+test<- read.csv('./pml-testing.csv', header=T)
+dim(dataset)
+```
+
+## Exploration and preprocessing:
+
+#### Above we see that there are 160 variables counting 19622 records. Let's explore te quality of the data:
+ 
+```{r}
+na_count <-sapply(dataset, function(y) sum(length(which(is.na(y)))))
+na_count_df <- data.frame(na_count>0)
+sum(na_count_df$na_count)
+```
+
+####67 columns have NA's, we will exclude these from the dataset;
+
+```{r pressure}
+dataset_clean <- dataset[,which(na_count == 0)]
+dim(dataset_clean)
+```
+
+####93 columns are left for the analysis, now we will exclude the columns with zero or near zero variance: 
+
+```{r}
+library(caret)
+NZV <- nearZeroVar(dataset_clean)
+dataset_clean <- dataset_clean[-NZV]
+dim(dataset_clean)
+```
+
+####Finally we exclude the first 6 descriptive columns that can'st be predicters (name / timestamps / num_window):
+
+```{r}
+dataset_clean <- dataset_clean[,7:59]
+dim(dataset_clean)
+```
+
+####53 columns / potential predicters are left to train our machine learning model, we split this cleanes dataset in a training (80%) and validation set (20%) for performing the cross validation:
+
+```{r}
+inTrain <- createDataPartition(y=dataset_clean$classe, p=0.8, list=FALSE)
+Training <- dataset_clean[inTrain, ]
+Validation <- dataset_clean[-inTrain, ]
+
+```
+
+####Ok, we're finished the preprocessing proces, the datasets can now be used for building ML models
+
+## Machine Learning models
+
+####We will predict the classification "classe", where we try 2 algorithmns we learned in the course: the Decision Tree and Random Forest Algorithm. We first have a look how the decision tree works out:
+
+```{r}
+library(rpart) 
+library(rpart.plot)
+
+#Classification Tree
+set.seed(1234)
+mod_dt <- rpart(classe ~ ., data=Training, method="class")
+
+#Plot Decision Tree
+rpart.plot(mod_dt, main="Classification Tree", extra=102, under=TRUE, faclen=0)
+
+
+pred_dt_train <- predict(mod_dt, Training, type = "class")
+CM_dt <- confusionMatrix(Training$classe, pred_dt_train)
+CM_dt
+Accuracy_dt <- round(CM_dt$overall[1]*100,2)
+
+```
+
+####Results of using the Decision Tree algorithm shows a accuracy of  `r Accuracy_dt`%. Let's try the Random Forest algorithm:
+
+
+``` {r}
+library(randomForest)
+mod_rf <- randomForest(classe ~ ., data = Training)
+
+pred_rf_train <- predict(mod_rf, Training)
+CM_rf <- confusionMatrix(Training$classe, pred_rf_train)
+CM_rf
+Accuracy_rf <- round(CM_rf$overall[1]*100,2)
+
+```
+####Results of using the Random Forest algorithm shows a accuracy of  `r Accuracy_rf`%. Let's validate this model on validation dataset we just created:
+
+####Cross Validation of the Random Forest model:
+
+```{r}
+pred_rf_val <- predict(mod_rf, Validation)
+CM_rf_val <- confusionMatrix(Validation$classe, pred_rf_val)
+CM_rf_val
+Accuracy_rf_val <- round(CM_rf_val$overall[1]*100,2)
+```
+
+####Cross Validation results of the trained Random Forest model shows a accuracy of  `r Accuracy_rf_val`%. (Out-of-Sample error is `r 100 - Accuracy_rf_val`%).
+
+##Conclusion:
+
+####In this case the random forest algorithm outperformed the decision tree algoritm. We were able to predict the "classe"  with a high accuracy of `r Accuracy_rf_val`%. The 20 most important features are:
+
+```{r}
+Feature_imp <- importance(mod_rf)
+Feature_imp <- as.data.frame(as.table(Feature_imp))
+
+Feature_imp$Var2 <- NULL
+names(Feature_imp) <- c("Feature", "Importance")
+
+Feature_imp <- head(Feature_imp[order(-Feature_imp$Importance),],20)
+
+barplot(Feature_imp$Importance, names = Feature_imp$Feature,
+        xlab = "", ylab = "Importance",
+        main = "Top 20 features",
+        las=2)
+
+```
+
+
+#### Finally we run the model on the test set in order to answer the assignment questions
+
+```{r}
+predict_FINAL <- predict(mod_rf, test)
+print(predict_FINAL)
+```
+
+
