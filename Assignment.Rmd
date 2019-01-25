@@ -2,7 +2,10 @@
 title: "Assigment"
 author: "Jaco"
 date: "25-1-2019"
-output: html_document
+output:
+  word_document: default
+  pdf_document: default
+  html_document: default
 ---
 
 ## Introduction
